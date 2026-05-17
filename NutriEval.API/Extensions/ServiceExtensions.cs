@@ -140,6 +140,9 @@ public static class ServiceExtensions
         services.AddScoped<IClienteRepository, ClienteRepository>();
         services.AddScoped<IClienteService, ClienteService>();
 
+        services.AddScoped<IEvaluacionRepository, EvaluacionRepository>();
+        services.AddScoped<IEvaluacionService, EvaluacionService>();
+
         return services;
     }
 }
