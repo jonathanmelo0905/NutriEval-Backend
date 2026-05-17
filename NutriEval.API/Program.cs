@@ -29,6 +29,8 @@ var app = builder.Build();
 
 app.UseGlobalExceptionHandler();          // 1. captura toda excepción no controlada
 
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -66,4 +68,9 @@ static void MapEnvironmentVariables(ConfigurationManager configuration)
         if (!string.IsNullOrEmpty(value))
             configuration[configKey] = value;
     }
+
+    // Railway inyecta PORT — configurar Kestrel para escuchar en ese puerto
+    var port = Environment.GetEnvironmentVariable("PORT");
+    if (!string.IsNullOrEmpty(port))
+        configuration["Kestrel:Endpoints:Http:Url"] = $"http://+:{port}";
 }
