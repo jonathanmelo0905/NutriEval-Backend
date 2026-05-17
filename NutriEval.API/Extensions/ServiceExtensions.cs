@@ -154,6 +154,8 @@ public static class ServiceExtensions
         services.AddScoped<ISesionRepository, SesionRepository>();
         services.AddScoped<ISesionService, SesionService>();
 
+        services.AddScoped<IConfiguracionService, ConfiguracionService>();
+
         return services;
     }
 
