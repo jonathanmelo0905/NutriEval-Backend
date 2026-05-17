@@ -1,10 +1,14 @@
 using System.Text;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using NutriEval.API.Data;
+using NutriEval.API.Models.Entities;
+using NutriEval.API.Services;
+using NutriEval.API.Services.Interfaces;
 
 namespace NutriEval.API.Extensions;
 
@@ -120,6 +124,16 @@ public static class ServiceExtensions
                 { scheme, Array.Empty<string>() }
             });
         });
+
+        return services;
+    }
+
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    {
+        services.AddScoped<IPasswordHasher<Entrenador>, PasswordHasher<Entrenador>>();
+        services.AddScoped<IPasswordHasher<Cliente>, PasswordHasher<Cliente>>();
+
+        services.AddScoped<IAuthService, AuthService>();
 
         return services;
     }
