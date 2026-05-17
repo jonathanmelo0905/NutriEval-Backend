@@ -143,6 +143,9 @@ public static class ServiceExtensions
         services.AddScoped<IEvaluacionRepository, EvaluacionRepository>();
         services.AddScoped<IEvaluacionService, EvaluacionService>();
 
+        services.AddScoped<IMedidasRepository, MedidasRepository>();
+        services.AddScoped<IMedidasService, MedidasService>();
+
         return services;
     }
 }
