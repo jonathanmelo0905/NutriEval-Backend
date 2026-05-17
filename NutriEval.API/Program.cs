@@ -21,6 +21,7 @@ builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddCorsPolicy(builder.Configuration);
 builder.Services.AddSwaggerWithJwt();
+builder.Services.AddCloudinary(builder.Configuration);
 builder.Services.AddApplicationServices();
 
 // ── Pipeline ─────────────────────────────────────────────────────────────────

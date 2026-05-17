@@ -1,4 +1,5 @@
 using System.Text;
+using CloudinaryDotNet;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -145,6 +146,28 @@ public static class ServiceExtensions
 
         services.AddScoped<IMedidasRepository, MedidasRepository>();
         services.AddScoped<IMedidasService, MedidasService>();
+
+        services.AddScoped<IFotosRepository, FotosRepository>();
+        services.AddScoped<IFotosService, FotosService>();
+        services.AddScoped<ICloudinaryService, CloudinaryService>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddCloudinary(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        var cloudName  = configuration["Cloudinary:CloudName"]
+            ?? throw new InvalidOperationException("CLOUDINARY_CLOUD_NAME no está configurado.");
+        var apiKey     = configuration["Cloudinary:ApiKey"]
+            ?? throw new InvalidOperationException("CLOUDINARY_API_KEY no está configurado.");
+        var apiSecret  = configuration["Cloudinary:ApiSecret"]
+            ?? throw new InvalidOperationException("CLOUDINARY_API_SECRET no está configurado.");
+
+        var account    = new Account(cloudName, apiKey, apiSecret);
+        var cloudinary = new Cloudinary(account) { Api = { Secure = true } };
+
+        services.AddSingleton(cloudinary);
 
         return services;
     }
