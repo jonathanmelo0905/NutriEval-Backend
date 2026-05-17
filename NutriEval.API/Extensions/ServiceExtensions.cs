@@ -151,6 +151,9 @@ public static class ServiceExtensions
         services.AddScoped<IFotosService, FotosService>();
         services.AddScoped<ICloudinaryService, CloudinaryService>();
 
+        services.AddScoped<ISesionRepository, SesionRepository>();
+        services.AddScoped<ISesionService, SesionService>();
+
         return services;
     }
 
