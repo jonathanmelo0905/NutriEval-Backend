@@ -85,10 +85,19 @@ public static class ServiceExtensions
         {
             options.AddPolicy("NutriEvalPolicy", policy =>
             {
-                policy.WithOrigins(allOrigins)
-                      .AllowAnyHeader()
-                      .AllowAnyMethod()
-                      .AllowCredentials();
+                if (allOrigins.Length == 0)
+                {
+                    // Sin orígenes configurados: permitir cualquier origen sin credenciales
+                    // (solo ocurre en entornos sin configuración — no debería pasar en producción)
+                    policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+                }
+                else
+                {
+                    policy.WithOrigins(allOrigins)
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .AllowCredentials();
+                }
             });
         });
 
