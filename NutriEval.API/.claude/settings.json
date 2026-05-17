@@ -5,7 +5,18 @@
       "Bash(dotnet build *)",
       "Bash(Stop-Process -Id 51600 -Force -ErrorAction SilentlyContinue)",
       "Bash(Write-Host \"Proceso detenido\")",
-      "PowerShell(Stop-Process -Id 51600 -Force -ErrorAction SilentlyContinue)"
+      "PowerShell(Stop-Process -Id 51600 -Force -ErrorAction SilentlyContinue)",
+      "Bash(dotnet ef *)",
+      "Read(//c/Program Files/**)",
+      "PowerShell(winget install --id PostgreSQL.PostgreSQL --version 16 --accept-source-agreements --accept-package-agreements 2>&1)",
+      "Read(//c//**)",
+      "Bash(ls \"C:/\" 2>&1)",
+      "PowerShell(Start-Service -Name \"postgresql-x64-17\" -ErrorAction Stop)",
+      "PowerShell(Get-Service -Name \"postgresql-x64-17\")",
+      "Bash(sc query *)",
+      "Bash(PGPASSWORD=postgres \"/c/Program Files/PostgreSQL/17/bin/psql\" -U postgres -h localhost -p 5432 -c \"SELECT version\\(\\);\")",
+      "Bash(PGPASSWORD=postgres \"/c/Program Files/PostgreSQL/17/bin/psql\" -U postgres -h localhost -p 5432 -c \"CREATE DATABASE nutrieval_dev ENCODING='UTF8' LC_COLLATE='Spanish_Spain.1252' LC_CTYPE='Spanish_Spain.1252' TEMPLATE=template0;\")",
+      "Bash(PGPASSWORD=postgres \"/c/Program Files/PostgreSQL/17/bin/psql\" -U postgres -h localhost -d nutrieval_dev -c \"\\\\dt\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\Asus\\Desktop\\Proyecto-app\\NutriEval"
