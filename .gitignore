@@ -1,0 +1,56 @@
+## Compilación
+[Bb]in/
+[Oo]bj/
+out/
+
+## Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+## Rider / JetBrains
+.idea/
+*.sln.iml
+
+## Archivos de publicación
+[Pp]ublish/
+*.[Pp]ublish.xml
+*.pubxml
+*.pubxml.user
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!**/packages/build/
+
+## Entornos y secretos — NUNCA commitear
+.env
+.env.local
+.env.*.local
+appsettings.*.local.json
+secrets.json
+
+## Logs
+*.log
+logs/
+
+## Cobertura y pruebas
+coverage/
+TestResults/
+*.trx
+*.coverage
+
+## OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## Temporales
+*.tmp
+*.temp
+~$*

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NutriEval.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6c1209d52c284bb7ef72d0936138d3e788269421")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e90a16032c611f238fb5f4bfd27e2a612cf770a6")]
 [assembly: System.Reflection.AssemblyProductAttribute("NutriEval.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NutriEval.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

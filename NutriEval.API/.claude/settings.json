@@ -3,6 +3,9 @@
     "allow": [
       "Bash(dotnet add *)",
       "Bash(dotnet build *)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Asus\\Desktop\\Proyecto-app\\NutriEval"
     ]
   }
 }

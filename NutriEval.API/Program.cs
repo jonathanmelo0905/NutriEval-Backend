@@ -1,15 +1,29 @@
+using FluentValidation;
+using FluentValidation.AspNetCore;
+using NutriEval.API.Extensions;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Mapea las variables de entorno de Railway al sistema de configuración de ASP.NET Core
+MapEnvironmentVariables(builder.Configuration);
 
+// ── Servicios ────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddHttpContextAccessor();
 
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+builder.Services.AddAutoMapper(typeof(Program).Assembly);
+
+builder.Services.AddDatabase(builder.Configuration);
+builder.Services.AddJwtAuthentication(builder.Configuration);
+builder.Services.AddCorsPolicy(builder.Configuration);
+builder.Services.AddSwaggerWithJwt();
+
+// ── Pipeline ─────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -17,9 +31,33 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseCors("NutriEvalPolicy");
+app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+static void MapEnvironmentVariables(ConfigurationManager configuration)
+{
+    var mappings = new Dictionary<string, string>
+    {
+        ["DATABASE_URL"]          = "ConnectionStrings:DefaultConnection",
+        ["JWT_SECRET"]            = "Jwt:Secret",
+        ["JWT_ISSUER"]            = "Jwt:Issuer",
+        ["JWT_AUDIENCE"]          = "Jwt:Audience",
+        ["JWT_EXPIRES_HOURS"]     = "Jwt:ExpiresHours",
+        ["CLOUDINARY_CLOUD_NAME"] = "Cloudinary:CloudName",
+        ["CLOUDINARY_API_KEY"]    = "Cloudinary:ApiKey",
+        ["CLOUDINARY_API_SECRET"] = "Cloudinary:ApiSecret",
+        ["FRONTEND_URL"]          = "Cors:FrontendUrl"
+    };
+
+    foreach (var (envVar, configKey) in mappings)
+    {
+        var value = Environment.GetEnvironmentVariable(envVar);
+        if (!string.IsNullOrEmpty(value))
+            configuration[configKey] = value;
+    }
+}
