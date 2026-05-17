@@ -7,6 +7,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using NutriEval.API.Data;
 using NutriEval.API.Models.Entities;
+using NutriEval.API.Repositories;
+using NutriEval.API.Repositories.Interfaces;
 using NutriEval.API.Services;
 using NutriEval.API.Services.Interfaces;
 
@@ -134,6 +136,9 @@ public static class ServiceExtensions
         services.AddScoped<IPasswordHasher<Cliente>, PasswordHasher<Cliente>>();
 
         services.AddScoped<IAuthService, AuthService>();
+
+        services.AddScoped<IClienteRepository, ClienteRepository>();
+        services.AddScoped<IClienteService, ClienteService>();
 
         return services;
     }
