@@ -1,6 +1,7 @@
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using NutriEval.API.Extensions;
+using NutriEval.API.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +25,8 @@ builder.Services.AddSwaggerWithJwt();
 // ── Pipeline ─────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
+app.UseGlobalExceptionHandler();          // 1. captura toda excepción no controlada
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -32,7 +35,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("NutriEvalPolicy");
-app.UseAuthentication();
+app.UseAuthentication();                  // 2. valida JWT y puebla HttpContext.User
+app.UseTenantContext();                   // 3. extrae tenant_id del claim y lo pone en Items
 app.UseAuthorization();
 app.MapControllers();
 
