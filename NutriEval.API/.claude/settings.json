@@ -16,7 +16,10 @@
       "Bash(sc query *)",
       "Bash(PGPASSWORD=postgres \"/c/Program Files/PostgreSQL/17/bin/psql\" -U postgres -h localhost -p 5432 -c \"SELECT version\\(\\);\")",
       "Bash(PGPASSWORD=postgres \"/c/Program Files/PostgreSQL/17/bin/psql\" -U postgres -h localhost -p 5432 -c \"CREATE DATABASE nutrieval_dev ENCODING='UTF8' LC_COLLATE='Spanish_Spain.1252' LC_CTYPE='Spanish_Spain.1252' TEMPLATE=template0;\")",
-      "Bash(PGPASSWORD=postgres \"/c/Program Files/PostgreSQL/17/bin/psql\" -U postgres -h localhost -d nutrieval_dev -c \"\\\\dt\")"
+      "Bash(PGPASSWORD=postgres \"/c/Program Files/PostgreSQL/17/bin/psql\" -U postgres -h localhost -d nutrieval_dev -c \"\\\\dt\")",
+      "PowerShell(Stop-Process -Name \"NutriEval.API\" -Force -ErrorAction SilentlyContinue)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Asus\\Desktop\\Proyecto-app\\NutriEval"
