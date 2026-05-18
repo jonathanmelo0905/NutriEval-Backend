@@ -40,11 +40,8 @@ app.UseGlobalExceptionHandler();          // 1. captura toda excepción no contr
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
 app.UseCors("NutriEvalPolicy");
