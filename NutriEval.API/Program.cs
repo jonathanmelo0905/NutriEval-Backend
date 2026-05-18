@@ -1,6 +1,8 @@
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using NutriEval.API.Data;
 using NutriEval.API.Extensions;
 using NutriEval.API.Middleware;
 
@@ -27,6 +29,12 @@ builder.Services.AddApplicationServices();
 
 // ── Pipeline ─────────────────────────────────────────────────────────────────
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<NutriEvalDbContext>();
+    db.Database.Migrate();
+}
 
 app.UseGlobalExceptionHandler();          // 1. captura toda excepción no controlada
 
