@@ -452,25 +452,25 @@ PUT    /api/configuracion/redes        → actualizar redes sociales
 
 ## 6. Roadmap Backend
 
-### 🔄 Fase 5 — v1.0 (actual)
-- [ ] Crear proyecto ASP.NET Core Web API (.NET 8)
-- [ ] Configurar Entity Framework Core + PostgreSQL
-- [ ] Crear todas las entidades del esquema
-- [ ] Configurar ASP.NET Identity + JWT
-- [ ] Implementar middleware de tenant
-- [ ] Implementar middleware de excepciones
-- [ ] Endpoints Auth completos
-- [ ] Endpoints Clientes completos
-- [ ] Endpoints Evaluaciones completos
-- [ ] Endpoints Medidas completos
-- [ ] Endpoints Fotos + integración Cloudinary
-- [ ] Endpoints Sesiones completos
-- [ ] Endpoints Configuración completos
-- [ ] Configurar CORS para frontend Angular
-- [ ] Configurar Swagger / Scalar
-- [ ] Deploy en Railway con variables de entorno
-- [ ] Configurar PostgreSQL en Railway
-- [ ] `/update-claude-md` al terminar
+### ✅ Fase 5 — v1.0 (completada)
+- [x] Crear proyecto ASP.NET Core Web API (.NET 8)
+- [x] Configurar Entity Framework Core + PostgreSQL
+- [x] Crear todas las entidades del esquema
+- [x] Configurar ASP.NET Identity + JWT
+- [x] Implementar middleware de tenant
+- [x] Implementar middleware de excepciones
+- [x] Endpoints Auth completos
+- [x] Endpoints Clientes completos
+- [x] Endpoints Evaluaciones completos
+- [x] Endpoints Medidas completos
+- [x] Endpoints Fotos + integración Cloudinary
+- [x] Endpoints Sesiones completos
+- [x] Endpoints Configuración completos
+- [x] Configurar CORS para frontend Angular
+- [x] Configurar Swagger / Scalar (habilitado en todos los entornos)
+- [x] Deploy en Railway con variables de entorno (Dockerfile + railway.toml + PORT + DATABASE_URL → Npgsql + auto-migrate)
+- [x] Configurar PostgreSQL en Railway
+- [x] `/update-claude-md` al terminar
 
 ### ⏳ v2.0
 - [ ] Endpoints Rutinas + Ejercicios
