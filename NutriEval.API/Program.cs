@@ -1,5 +1,6 @@
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using Npgsql;
 using NutriEval.API.Extensions;
 using NutriEval.API.Middleware;
 
@@ -65,12 +66,53 @@ static void MapEnvironmentVariables(ConfigurationManager configuration)
     foreach (var (envVar, configKey) in mappings)
     {
         var value = Environment.GetEnvironmentVariable(envVar);
-        if (!string.IsNullOrEmpty(value))
-            configuration[configKey] = value;
+        if (string.IsNullOrEmpty(value)) continue;
+
+        configuration[configKey] = envVar == "DATABASE_URL"
+            ? ConvertirDatabaseUrl(value)
+            : value;
     }
 
     // Railway inyecta PORT — configurar Kestrel para escuchar en ese puerto
     var port = Environment.GetEnvironmentVariable("PORT");
     if (!string.IsNullOrEmpty(port))
         configuration["Kestrel:Endpoints:Http:Url"] = $"http://+:{port}";
+}
+
+// Convierte postgresql://user:pass@host:port/db[?params] al formato key=value de Npgsql.
+// Si el valor ya está en formato key=value lo devuelve sin modificar.
+static string ConvertirDatabaseUrl(string url)
+{
+    if (!url.StartsWith("postgresql://") && !url.StartsWith("postgres://"))
+        return url;
+
+    var uri    = new Uri(url);
+    var partes = uri.UserInfo.Split(':', 2);
+
+    var builder = new NpgsqlConnectionStringBuilder
+    {
+        Host     = uri.Host,
+        Port     = uri.Port > 0 ? uri.Port : 5432,
+        Database = uri.AbsolutePath.TrimStart('/'),
+        Username = Uri.UnescapeDataString(partes[0]),
+        Password = partes.Length > 1 ? Uri.UnescapeDataString(partes[1]) : string.Empty,
+    };
+
+    // Propagar parámetros de query (Railway público añade ?sslmode=require)
+    if (!string.IsNullOrEmpty(uri.Query))
+    {
+        foreach (var param in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = param.Split('=', 2);
+            if (kv.Length != 2) continue;
+
+            if (kv[0].Equals("sslmode", StringComparison.OrdinalIgnoreCase) &&
+                Enum.TryParse<SslMode>(kv[1], ignoreCase: true, out var sslMode))
+            {
+                builder.SslMode = sslMode;
+            }
+        }
+    }
+
+    return builder.ConnectionString;
 }
