@@ -19,7 +19,10 @@
       "Bash(PGPASSWORD=postgres \"/c/Program Files/PostgreSQL/17/bin/psql\" -U postgres -h localhost -d nutrieval_dev -c \"\\\\dt\")",
       "PowerShell(Stop-Process -Name \"NutriEval.API\" -Force -ErrorAction SilentlyContinue)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(grep -i \"fallbackPackageFolders\\\\|packageFolders\\\\|Users\\\\\\\\\\\\\\\\Asus\\\\|C:\\\\\\\\\\\\\\\\\" \"c:/Users/Asus/Desktop/Proyecto-app/NutriEval/NutriEval.API/obj/project.assets.json\")",
+      "Bash(git rm *)",
+      "Bash(git push *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Asus\\Desktop\\Proyecto-app\\NutriEval"
