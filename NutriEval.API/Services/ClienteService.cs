@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BCrypt.Net;
 using NutriEval.API.Models.DTOs.Clientes;
 using NutriEval.API.Models.Entities;
 using NutriEval.API.Repositories.Interfaces;
@@ -46,7 +47,10 @@ public class ClienteService(
             Telefono           = dto.Telefono?.Trim(),
             ContactoEmergencia = Serialize(dto.ContactoEmergencia),
             Salud              = Serialize(dto.Salud),
-            Habitos            = Serialize(dto.Habitos)
+            Habitos            = Serialize(dto.Habitos),
+            PasswordHash       = dto.PasswordTemporal is not null
+                                     ? BCrypt.Net.BCrypt.HashPassword(dto.PasswordTemporal)
+                                     : null
         };
 
         await repository.AddAsync(cliente);

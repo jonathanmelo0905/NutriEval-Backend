@@ -16,6 +16,7 @@ public class CreateClienteDto
     public object? ContactoEmergencia { get; set; }
     public object? Salud { get; set; }
     public object? Habitos { get; set; }
+    public string? PasswordTemporal { get; set; }
 }
 
 public class CreateClienteValidator : AbstractValidator<CreateClienteDto>
@@ -60,5 +61,9 @@ public class CreateClienteValidator : AbstractValidator<CreateClienteDto>
         RuleFor(x => x.Estatura)
             .GreaterThan(0).WithMessage("La estatura debe ser mayor a 0.")
             .When(x => x.Estatura.HasValue);
+
+        RuleFor(x => x.PasswordTemporal)
+            .MinimumLength(6).WithMessage("La contraseña temporal debe tener al menos 6 caracteres.")
+            .When(x => x.PasswordTemporal is not null);
     }
 }

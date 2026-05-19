@@ -405,10 +405,13 @@ GET  /api/auth/me                     → perfil del usuario actual
 ```
 GET    /api/clientes                  → lista clientes del entrenador
 POST   /api/clientes                  → crear cliente
+                                         acepta campo opcional passwordTemporal (string);
+                                         si viene, se hashea con BCrypt y se guarda en password_hash
 GET    /api/clientes/:id              → detalle cliente
 PUT    /api/clientes/:id              → actualizar cliente
 DELETE /api/clientes/:id              → desactivar cliente
-POST   /api/clientes/:id/invitar      → enviar invitación por email
+POST   /api/clientes/:id/invitar      → [v2.0] enviar invitación por email
+                                         en v1.0 el entrenador asigna passwordTemporal al crear el cliente
 ```
 
 ### Evaluaciones
@@ -477,7 +480,7 @@ PUT    /api/configuracion/redes        → actualizar redes sociales
 - [ ] Endpoints Planes Nutricionales
 - [ ] Endpoints Check-ins
 - [ ] Integración Open Food Facts API
-- [ ] Sistema de invitaciones por email (SendGrid)
+- [ ] POST /api/clientes/:id/invitar — enviar invitación por email (SendGrid) para que el cliente active su cuenta
 - [ ] Notificaciones push (Firebase Cloud Messaging)
 
 ### ⏳ v3.0
