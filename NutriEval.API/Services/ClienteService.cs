@@ -125,6 +125,7 @@ public class ClienteService(
         Objetivo    = c.Objetivo,
         Nivel       = c.Nivel,
         PesoInicial = c.PesoInicial,
+        Estatura    = c.Estatura,
         Activo      = c.Activo,
         CreatedAt   = c.CreatedAt
     };
