@@ -9,6 +9,6 @@ public class ClienteListItemDto
     public string? Nivel { get; set; }
     public decimal? PesoInicial { get; set; }
     public bool Activo { get; set; }
-    public decimal? estatura { get; set; }
+    public decimal? Estatura { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
