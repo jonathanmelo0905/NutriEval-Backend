@@ -26,7 +26,7 @@ public class CreateClienteValidator : AbstractValidator<CreateClienteDto>
     private static readonly string[] NivelesValidos =
         ["principiante", "intermedio", "avanzado"];
     private static readonly string[] SexosValidos =
-        ["masculino", "femenino", "otro"];
+        ["Masculino", "Femenino", "Otro"];
 
     public CreateClienteValidator()
     {
