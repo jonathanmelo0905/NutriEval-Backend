@@ -10,7 +10,7 @@ public class ClienteRepository(NutriEvalDbContext db) : IClienteRepository
 {
     public async Task<IEnumerable<ClienteListItemDto>> GetAllByTenantAsync(Guid tenantId) =>
         await db.Clientes
-            .Where(c => c.TenantId == tenantId && c.Activo)
+            .Where(c => c.TenantId == tenantId)
             .OrderBy(c => c.Nombre)
             .Select(c => new ClienteListItemDto
             {

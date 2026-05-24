@@ -27,7 +27,8 @@
       "Bash(Select-Object -ExpandProperty FullName)"
     ],
     "additionalDirectories": [
-      "c:\\Users\\Asus\\Desktop\\Proyecto-app\\NutriEval"
+      "c:\\Users\\Asus\\Desktop\\Proyecto-app\\NutriEval",
+      "c:\\Users\\Asus\\Desktop\\Proyecto-app\\fitness-tracker\\src\\app\\pages\\cliente-detalle"
     ]
   }
 }
