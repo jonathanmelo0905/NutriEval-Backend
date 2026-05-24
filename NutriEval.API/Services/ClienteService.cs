@@ -11,11 +11,8 @@ public class ClienteService(
     IClienteRepository repository,
     ILogger<ClienteService> logger) : IClienteService
 {
-    public async Task<IEnumerable<ClienteListItemDto>> GetAllAsync(Guid tenantId)
-    {
-        var clientes = await repository.GetAllByTenantAsync(tenantId);
-        return clientes.Select(ToListItem);
-    }
+    public async Task<IEnumerable<ClienteListItemDto>> GetAllAsync(Guid tenantId) =>
+        await repository.GetAllByTenantAsync(tenantId);
 
     public async Task<ClienteDetalleDto> GetByIdAsync(Guid id, Guid tenantId)
     {
@@ -116,19 +113,6 @@ public class ClienteService(
     }
 
     // ── Mappers ───────────────────────────────────────────────────────────────
-
-    private static ClienteListItemDto ToListItem(Cliente c) => new()
-    {
-        Id          = c.Id,
-        Nombre      = c.Nombre,
-        Email       = c.Email,
-        Objetivo    = c.Objetivo,
-        Nivel       = c.Nivel,
-        PesoInicial = c.PesoInicial,
-        Estatura    = c.Estatura,
-        Activo      = c.Activo,
-        CreatedAt   = c.CreatedAt
-    };
 
     private static ClienteDetalleDto ToDetalle(Cliente c) => new()
     {

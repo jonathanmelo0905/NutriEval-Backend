@@ -8,7 +8,12 @@ public class ClienteListItemDto
     public string? Objetivo { get; set; }
     public string? Nivel { get; set; }
     public decimal? PesoInicial { get; set; }
-    public bool Activo { get; set; }
     public decimal? Estatura { get; set; }
+    public bool Activo { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+
+    // Campos calculados — generados con EXISTS en la misma query
+    public bool TieneFotos { get; set; }
+    public bool TieneEvaluaciones { get; set; }
+    public bool TieneSesiones { get; set; }
 }
