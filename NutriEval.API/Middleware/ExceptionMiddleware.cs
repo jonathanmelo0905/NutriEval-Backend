@@ -1,4 +1,5 @@
 using FluentValidation;
+using NutriEval.API.Exceptions;
 using NutriEval.API.Models;
 
 namespace NutriEval.API.Middleware;
@@ -30,6 +31,11 @@ public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddlewa
                 StatusCodes.Status400BadRequest,
                 "Error de validación",
                 e.Errors.Select(f => f.ErrorMessage)),
+
+            ConflictException e => (
+                StatusCodes.Status409Conflict,
+                e.Message,
+                e.Codes),
 
             KeyNotFoundException e => (
                 StatusCodes.Status404NotFound,

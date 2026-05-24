@@ -26,6 +26,12 @@ public class SesionRepository(NutriEvalDbContext db) : ISesionRepository
             .Include(s => s.Cliente)
             .FirstOrDefaultAsync(s => s.Id == id && s.TenantId == tenantId);
 
+    public async Task<bool> ExistsSesionProgramadaAsync(Guid tenantId, DateTimeOffset fechaHora) =>
+        await db.Sesiones.AnyAsync(s =>
+            s.TenantId == tenantId &&
+            s.Estado   == "programada" &&
+            s.FechaHora == fechaHora);
+
     public async Task AddAsync(Sesion sesion)
     {
         db.Sesiones.Add(sesion);

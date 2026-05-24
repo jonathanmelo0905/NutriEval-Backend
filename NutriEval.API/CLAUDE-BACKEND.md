@@ -1,6 +1,6 @@
 # CLAUDE-BACKEND.md — Fuente de verdad del backend NutriEval.API
 
-> **Última actualización:** 2026-05-24  
+> **Última actualización:** 2026-05-24 (regla solapamiento sesiones)  
 > **Estado:** Revisado contra el código real. Toda la información aquí es fiel al código fuente.
 
 ---
@@ -973,6 +973,18 @@ mesReferencia: string? (formato "YYYY-MM")
   "errors": []
 }
 ```
+- **Regla de negocio — solapamiento de horario:**  
+  Antes de insertar se verifica si el entrenador (`tenantId` del JWT) ya tiene **otra sesión con `estado = "programada"`** cuya `fechaHora` coincide exactamente con la solicitada. Si hay conflicto:
+  - **Response 409:**
+  ```json
+  {
+    "success": false,
+    "data": null,
+    "message": "Ya tienes una sesión programada a esa hora.",
+    "errors": ["SESION_SOLAPADA"]
+  }
+  ```
+  > **Nota:** La comparación es exacta (`==`). Dos sesiones con un minuto de diferencia **no** se consideran solapadas. Sólo sesiones en estado `"programada"` participan del chequeo; las `"canceladas"`, `"completadas"` o `"no_asistio"` no bloquean la agenda.
 
 ---
 
@@ -1083,6 +1095,14 @@ mesReferencia: string? (formato "YYYY-MM")
 4. **POST /clientes/{id}/invitar es un stub:**
    - Valida que el cliente tenga email, pero no envía ninguna comunicación. Responde 202 Accepted.
 
+### 📅 Reglas de negocio de Sesiones
+
+| Regla | Endpoint | HTTP | Código de error |
+|-------|----------|------|-----------------|
+| Entrenador no puede tener dos sesiones `programada` a la misma `fechaHora` exacta | `POST /api/sesiones` | 409 | `SESION_SOLAPADA` |
+
+---
+
 ### 📋 Entidades sin controller implementado
 Las siguientes entidades existen en la BD pero no tienen endpoints aún:
 - `Rutina` + `Ejercicio`
@@ -1109,10 +1129,13 @@ El refresh token agrega: `token_type: "refresh"`
 | Excepción | HTTP Status | Manejada por |
 |-----------|-------------|--------------|
 | `ArgumentException` | 400 Bad Request | `ExceptionMiddleware` |
+| `ConflictException` | 409 Conflict | `ExceptionMiddleware` |
 | `KeyNotFoundException` | 404 Not Found | `ExceptionMiddleware` |
 | `UnauthorizedAccessException` | 401 Unauthorized | `ExceptionMiddleware` |
-| FluentValidation `ValidationException` | 422 Unprocessable Entity | `ExceptionMiddleware` |
+| FluentValidation `ValidationException` | 400 Bad Request | `ExceptionMiddleware` |
 | Cualquier otra | 500 Internal Server Error | `ExceptionMiddleware` |
+
+> **`ConflictException`** (en `Exceptions/ConflictException.cs`) lleva una propiedad `Codes: IEnumerable<string>` con claves legibles por máquina (e.g. `["SESION_SOLAPADA"]`). El middleware la serializa en el campo `errors` del envelope estándar.
 
 Los errores de validación de FluentValidation retornan:
 ```json

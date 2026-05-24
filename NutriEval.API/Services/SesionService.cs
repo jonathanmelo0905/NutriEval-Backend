@@ -1,3 +1,4 @@
+using NutriEval.API.Exceptions;
 using NutriEval.API.Models.DTOs.Sesiones;
 using NutriEval.API.Models.Entities;
 using NutriEval.API.Repositories.Interfaces;
@@ -29,6 +30,13 @@ public class SesionService(
     {
         var cliente = await clienteRepository.GetByIdAsync(dto.ClienteId, tenantId)
             ?? throw new KeyNotFoundException("Cliente no encontrado.");
+
+        // Regla de negocio: el entrenador no puede tener dos sesiones programadas a la misma hora exacta
+        var hayConflicto = await repository.ExistsSesionProgramadaAsync(tenantId, dto.FechaHora);
+        if (hayConflicto)
+            throw new ConflictException(
+                "Ya tienes una sesión programada a esa hora.",
+                ["SESION_SOLAPADA"]);
 
         var sesion = new Sesion
         {
