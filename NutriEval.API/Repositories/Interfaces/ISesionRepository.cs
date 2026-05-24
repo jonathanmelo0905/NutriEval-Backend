@@ -9,9 +9,11 @@ public interface ISesionRepository
     Task<Sesion?> GetByIdAsync(Guid id, Guid tenantId);
     /// <summary>
     /// Devuelve true si el tenant ya tiene una sesión con estado "programada"
-    /// cuya fechaHora coincide exactamente con la indicada.
+    /// cuyo intervalo [fechaHora, fechaHora+duracionMin) se solapa con
+    /// el intervalo [inicio, inicio+duracionMin) de la sesión candidata.
+    /// Condición estándar de solapamiento: existingStart &lt; candidatoFin AND candidatoInicio &lt; existingFin
     /// </summary>
-    Task<bool> ExistsSesionProgramadaAsync(Guid tenantId, DateTimeOffset fechaHora);
+    Task<bool> ExisteSolapamientoAsync(Guid tenantId, DateTimeOffset inicio, int duracionMin);
     Task AddAsync(Sesion sesion);
     Task SaveChangesAsync();
 }

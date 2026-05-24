@@ -26,11 +26,21 @@ public class SesionRepository(NutriEvalDbContext db) : ISesionRepository
             .Include(s => s.Cliente)
             .FirstOrDefaultAsync(s => s.Id == id && s.TenantId == tenantId);
 
-    public async Task<bool> ExistsSesionProgramadaAsync(Guid tenantId, DateTimeOffset fechaHora) =>
-        await db.Sesiones.AnyAsync(s =>
-            s.TenantId == tenantId &&
-            s.Estado   == "programada" &&
-            s.FechaHora == fechaHora);
+    public async Task<bool> ExisteSolapamientoAsync(Guid tenantId, DateTimeOffset inicio, int duracionMin)
+    {
+        // Intervalo de la sesión candidata: [inicio, fin)
+        var fin = inicio.AddMinutes(duracionMin);
+
+        // Solapamiento estándar de intervalos:
+        //   existingStart < candidatoFin  AND  candidatoInicio < existingFin
+        // donde existingFin = s.FechaHora + s.DuracionMin minutos
+        // Npgsql traduce .AddMinutes(int_column) a aritmética de intervalos en PostgreSQL.
+        return await db.Sesiones.AnyAsync(s =>
+            s.TenantId == tenantId        &&
+            s.Estado   == "programada"    &&
+            s.FechaHora         < fin     &&
+            inicio < s.FechaHora.AddMinutes(s.DuracionMin));
+    }
 
     public async Task AddAsync(Sesion sesion)
     {

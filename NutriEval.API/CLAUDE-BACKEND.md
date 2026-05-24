@@ -974,7 +974,23 @@ mesReferencia: string? (formato "YYYY-MM")
 }
 ```
 - **Regla de negocio — solapamiento de horario:**  
-  Antes de insertar se verifica si el entrenador (`tenantId` del JWT) ya tiene **otra sesión con `estado = "programada"`** cuya `fechaHora` coincide exactamente con la solicitada. Si hay conflicto:
+  Antes de insertar se verifica si el entrenador (`tenantId` del JWT) ya tiene **otra sesión con `estado = "programada"`** cuyo intervalo temporal se solapa con el de la nueva sesión. El algoritmo usa la condición estándar de solapamiento de intervalos:
+
+  ```
+  existente.FechaHora < nueva.FechaHora + nueva.DuracionMin
+  AND
+  nueva.FechaHora < existente.FechaHora + existente.DuracionMin
+  ```
+
+  Ejemplos:
+  | Existente | Nueva | ¿Solapa? |
+  |-----------|-------|----------|
+  | 10:00 – 11:00 (60 min) | 10:30 – 11:30 (60 min) | ✅ Sí → 409 |
+  | 10:00 – 11:00 (60 min) | 11:00 – 12:00 (60 min) | ❌ No (adyacentes) |
+  | 10:00 – 11:00 (60 min) | 09:00 – 10:00 (60 min) | ❌ No (adyacentes) |
+  | 10:00 – 11:00 (60 min) | 09:30 – 10:30 (60 min) | ✅ Sí → 409 |
+
+  Si hay conflicto:
   - **Response 409:**
   ```json
   {
@@ -984,7 +1000,7 @@ mesReferencia: string? (formato "YYYY-MM")
     "errors": ["SESION_SOLAPADA"]
   }
   ```
-  > **Nota:** La comparación es exacta (`==`). Dos sesiones con un minuto de diferencia **no** se consideran solapadas. Sólo sesiones en estado `"programada"` participan del chequeo; las `"canceladas"`, `"completadas"` o `"no_asistio"` no bloquean la agenda.
+  > **Nota:** Solo las sesiones en estado `"programada"` bloquean la agenda. Las `"canceladas"`, `"completadas"` y `"no_asistio"` se ignoran en el chequeo. La comparación de `FechaHora + DuracionMin` se ejecuta como aritmética de intervalos en PostgreSQL vía Npgsql (`.AddMinutes(s.DuracionMin)`).
 
 ---
 
@@ -1099,7 +1115,7 @@ mesReferencia: string? (formato "YYYY-MM")
 
 | Regla | Endpoint | HTTP | Código de error |
 |-------|----------|------|-----------------|
-| Entrenador no puede tener dos sesiones `programada` a la misma `fechaHora` exacta | `POST /api/sesiones` | 409 | `SESION_SOLAPADA` |
+| Entrenador no puede tener dos sesiones `programada` cuyos intervalos `[FechaHora, FechaHora+DuracionMin)` se solapan | `POST /api/sesiones` | 409 | `SESION_SOLAPADA` |
 
 ---
 

@@ -31,8 +31,9 @@ public class SesionService(
         var cliente = await clienteRepository.GetByIdAsync(dto.ClienteId, tenantId)
             ?? throw new KeyNotFoundException("Cliente no encontrado.");
 
-        // Regla de negocio: el entrenador no puede tener dos sesiones programadas a la misma hora exacta
-        var hayConflicto = await repository.ExistsSesionProgramadaAsync(tenantId, dto.FechaHora);
+        // Regla de negocio: el entrenador no puede tener sesiones programadas que se solapen
+        // Se verifica el intervalo completo [FechaHora, FechaHora+DuracionMin)
+        var hayConflicto = await repository.ExisteSolapamientoAsync(tenantId, dto.FechaHora, dto.DuracionMin);
         if (hayConflicto)
             throw new ConflictException(
                 "Ya tienes una sesión programada a esa hora.",
