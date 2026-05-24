@@ -1,164 +1,648 @@
-# CLAUDE.md — NutriEval (Backend)
+# CLAUDE-BACKEND.md — Fuente de verdad del backend NutriEval.API
+
+> **Última actualización:** 2026-05-23  
+> **Estado:** Revisado contra el código real. Toda la información aquí es fiel al código fuente.
 
 ---
 
-## 0. Instrucciones para la IA (leer siempre primero)
+## 1. Stack técnico
 
-### Comportamiento general
-- Antes de escribir código, confirma qué archivo(s) vas a tocar y espera aprobación si son más de 3
-- Si una tarea es ambigua, haz una sola pregunta de clarificación antes de proceder
-- Al terminar una tarea, indica qué cambió y si hay algo que deba actualizarse en este archivo
-
-### Fase actual: **Fase 5 — Backend v1.0**
-- Implementar API REST con ASP.NET Core, PostgreSQL, JWT y Cloudinary
-- No implementar funcionalidades de v2.0 ni posteriores aunque parezcan convenientes
-- Al completar un ítem, marcarlo como `[x]` en la sección 6
-
-### Contexto crítico: multi-tenant desde el inicio
-- **TODAS** las tablas tienen `tenant_id` (uuid)
-- **TODOS** los queries filtran por `tenant_id` del JWT
-- Un entrenador NUNCA puede ver datos de otro entrenador
-- El `tenant_id` se extrae del JWT en cada request — nunca viene del body
-
-### Reglas de código (permanentes)
-- Arquitectura en capas: Controllers → Services → Repositories → DbContext
-- Controllers: solo reciben, validan y responden — sin lógica de negocio
-- Services: toda la lógica de negocio aquí
-- Repositories: todo acceso a datos aquí — nunca queries en controllers
-- DTOs para todas las entradas y salidas — nunca exponer entidades directamente
-- Validación con FluentValidation o DataAnnotations en los DTOs
-- Respuestas estandarizadas: `{ success, data, message, errors }`
-- Manejo de errores con middleware global de excepciones
-- Logs con `ILogger` en servicios — nunca `Console.WriteLine`
-- Variables de entorno para todas las credenciales — nunca hardcodeadas
-- Commits: Conventional Commits → `feat(modulo): descripción`
+| Capa | Tecnología |
+|------|-----------|
+| Framework | ASP.NET Core 8 (minimal + controllers) |
+| ORM | Entity Framework Core 8 (PostgreSQL / Npgsql) |
+| Auth | JWT Bearer — access token (24 h) + refresh token (7 días) |
+| Validación | FluentValidation (validators en el mismo archivo del DTO) |
+| Contraseñas entrenador | `IPasswordHasher<Entrenador>` (ASP.NET Identity hasher) |
+| Contraseñas cliente | BCrypt.Net |
+| Imágenes | Cloudinary |
+| Respuesta estándar | `ApiResponse<T>` wrapper en **todas** las respuestas |
+| Multi-tenant | `TenantMiddleware` inyecta `TenantId` desde claim `sub` del JWT |
 
 ---
 
-## 1. Descripción General
+## 2. Envelope de respuesta estándar
 
-**Nombre:** NutriEval API
-**Propósito:** Backend REST para la plataforma SaaS NutriEval. Gestiona autenticación multi-tenant, clientes, evaluaciones físicas, medidas corporales, fotos de progreso, rutinas, nutrición, agenda y pagos.
-**Repositorio backend:** (por crear en Fase 5)
-**Versión actual:** 1.0.0
+Todas las respuestas usan `ApiResponse<T>`:
+
+```json
+{
+  "success": true | false,
+  "data": <T> | null,
+  "message": "string",
+  "errors": ["string"]
+}
+```
+
+En los ejemplos de abajo, `data` es el objeto documentado. Los errores de validación devuelven `success: false` con el array `errors` poblado.
 
 ---
 
-## 2. Stack Tecnológico
+## 3. Entidades del dominio (campos exactos)
 
-| Tecnología | Versión | Uso |
-|---|---|---|
-| ASP.NET Core Web API | .NET 8 | Framework principal |
-| Entity Framework Core | 8.x | ORM |
-| PostgreSQL | Latest | Base de datos principal |
-| ASP.NET Identity | 8.x | Gestión de usuarios y roles |
-| JWT Bearer | Latest | Autenticación stateless |
-| Cloudinary SDK | Latest | Almacenamiento fotos de progreso |
-| FluentValidation | Latest | Validación de DTOs |
-| AutoMapper | Latest | Mapeo entidades ↔ DTOs |
-| Swagger / Scalar | Latest | Documentación API |
+### Entrenador
+| Campo | Tipo | Default |
+|-------|------|---------|
+| Id | Guid | — |
+| Nombre | string | — |
+| Email | string | — |
+| PasswordHash | string | — |
+| Plan | string | `"trial"` |
+| TrialEndsAt | DateOnly? | null |
+| RedesSociales | string (JSON) | `"{}"` |
+| Activo | bool | `true` |
+| CreatedAt | DateTimeOffset | UtcNow |
 
-### Infraestructura
-| Servicio | Uso |
-|---|---|
-| Railway | Hosting backend + PostgreSQL |
-| Cloudinary | Almacenamiento imágenes (cloud: dnj3zphoj) |
+### Cliente
+| Campo | Tipo | Default |
+|-------|------|---------|
+| Id | Guid | — |
+| TenantId | Guid | — |
+| Nombre | string | — |
+| Email | string? | null |
+| PasswordHash | string? | null |
+| FechaNacimiento | DateOnly? | null |
+| Sexo | string? | null |
+| PesoInicial | decimal? | null |
+| Estatura | decimal? | null |
+| Objetivo | string? | null |
+| Nivel | string? | null |
+| Telefono | string? | null |
+| ContactoEmergencia | string (JSON) | `"{}"` |
+| Salud | string (JSON) | `"{}"` |
+| Habitos | string (JSON) | `"{}"` |
+| ParqCompletado | bool | `false` |
+| ParqDatos | string (JSON) | `"{}"` |
+| ParqFecha | DateTimeOffset? | null |
+| ConsentimientoAceptado | bool | `false` |
+| ConsentimientoFecha | DateTimeOffset? | null |
+| FotosIniciales | string (JSON array) | `"[]"` |
+| Activo | bool | `true` |
+| CreatedAt | DateTimeOffset | UtcNow |
 
-### Variables de entorno requeridas
-```env
-DATABASE_URL=postgresql://...
-JWT_SECRET=...
-JWT_ISSUER=nutrieval-api
-JWT_AUDIENCE=nutrieval-app
-JWT_EXPIRES_HOURS=24
-CLOUDINARY_CLOUD_NAME=dnj3zphoj
-CLOUDINARY_API_KEY=...
-CLOUDINARY_API_SECRET=...
-FRONTEND_URL=https://nutrieval-app.web.app
+### Evaluacion
+| Campo | Tipo | Default |
+|-------|------|---------|
+| Id | Guid | — |
+| TenantId | Guid | — |
+| ClienteId | Guid | — |
+| Tipo | string | — (`"nutricional"` \| `"fisica"`) |
+| DatosEntrada | string (JSON) | `"{}"` |
+| Resultados | string (JSON) | `"{}"` |
+| Fecha | DateOnly | hoy UTC |
+| Notas | string? | null |
+| CreatedAt | DateTimeOffset | UtcNow |
+
+### MedidaCorporal
+| Campo | Tipo |
+|-------|------|
+| Id | Guid |
+| TenantId | Guid |
+| ClienteId | Guid |
+| Peso | decimal? |
+| PorcentajeGrasa | decimal? |
+| MasaMuscular | decimal? |
+| Imc | decimal? |
+| Cintura | decimal? |
+| Cadera | decimal? |
+| Pecho | decimal? |
+| BrazoDerecho | decimal? |
+| BrazoIzquierdo | decimal? |
+| PiernaDerecha | decimal? |
+| PiernaIzquierda | decimal? |
+| Fecha | DateOnly (hoy UTC) |
+| Notas | string? |
+| CreatedAt | DateTimeOffset |
+
+### FotoProgreso
+| Campo | Tipo | Default |
+|-------|------|---------|
+| Id | Guid | — |
+| TenantId | Guid | — |
+| ClienteId | Guid | — |
+| UrlCloudinary | string | — |
+| PublicId | string | — |
+| Tipo | string | — (`"frontal"` \| `"lateral_der"` \| `"lateral_izq"` \| `"espalda"`) |
+| Fecha | DateOnly | hoy UTC |
+| MesReferencia | string? | null (formato `"YYYY-MM"`) |
+| SubidoPor | string | `"entrenador"` |
+| CreatedAt | DateTimeOffset | UtcNow |
+
+### Sesion
+| Campo | Tipo | Default |
+|-------|------|---------|
+| Id | Guid | — |
+| TenantId | Guid | — |
+| ClienteId | Guid | — |
+| FechaHora | DateTimeOffset | — |
+| DuracionMin | int | `60` |
+| Estado | string | `"programada"` |
+| Notas | string? | null |
+| CreatedAt | DateTimeOffset | UtcNow |
+
+Estados válidos de sesión: `programada`, `completada`, `cancelada`, `no_asistio`
+
+### Rutina (entidad sin controller aún)
+| Campo | Tipo | Default |
+|-------|------|---------|
+| Id | Guid | — |
+| TenantId | Guid | — |
+| ClienteId | Guid | — |
+| Nombre | string | — |
+| Descripcion | string? | null |
+| Dias | string (JSON array) | `"[]"` |
+| Activa | bool | `true` |
+| CreatedAt | DateTimeOffset | UtcNow |
+
+### Ejercicio (entidad sin controller aún)
+| Campo | Tipo | Default |
+|-------|------|---------|
+| Id | Guid | — |
+| TenantId | Guid? | null (null = global) |
+| Nombre | string | — |
+| GrupoMuscular | string? | null |
+| Instrucciones | string? | null |
+| UrlVideo | string? | null |
+| ErroresComunes | string? | null |
+| EsGlobal | bool | `false` |
+| CreatedAt | DateTimeOffset | UtcNow |
+
+### PlanNutricional (entidad sin controller aún)
+| Campo | Tipo | Default |
+|-------|------|---------|
+| Id | Guid | — |
+| TenantId | Guid | — |
+| ClienteId | Guid | — |
+| Calorias | decimal? | null |
+| Proteinas | decimal? | null |
+| Carbohidratos | decimal? | null |
+| Grasas | decimal? | null |
+| Agua | decimal? | null |
+| Comidas | string (JSON array) | `"[]"` |
+| Activo | bool | `true` |
+| CreatedAt | DateTimeOffset | UtcNow |
+
+### Checkin (entidad sin controller aún)
+| Campo | Tipo |
+|-------|------|
+| Id | Guid |
+| TenantId | Guid |
+| ClienteId | Guid |
+| Semana | DateOnly |
+| Energia | int? (1-10) |
+| Hambre | int? (1-10) |
+| Adherencia | int? (1-10) |
+| Sueno | int? (1-10) |
+| Estres | int? (1-10) |
+| PesoSemana | decimal? |
+| NotasCliente | string? |
+| FeedbackEntrenador | string? |
+| CreatedAt | DateTimeOffset |
+
+### Pago (entidad sin controller aún)
+| Campo | Tipo | Default |
+|-------|------|---------|
+| Id | Guid | — |
+| TenantId | Guid | — |
+| ClienteId | Guid | — |
+| Monto | decimal | — |
+| Moneda | string | `"COP"` |
+| Estado | string | `"pendiente"` |
+| Proveedor | string? | null |
+| ReferenciaExterna | string? | null |
+| VenceEn | DateOnly? | null |
+| CreatedAt | DateTimeOffset | UtcNow |
+
+### SuscripcionSaas (entidad sin controller aún)
+| Campo | Tipo | Default |
+|-------|------|---------|
+| Id | Guid | — |
+| EntrenadorId | Guid | — |
+| Plan | string | — |
+| Estado | string | `"activa"` |
+| TrialEndsAt | DateOnly? | null |
+| NextBilling | DateOnly? | null |
+| StripeCustomerId | string? | null |
+| StripeSubscriptionId | string? | null |
+| CreatedAt | DateTimeOffset | UtcNow |
+
+---
+
+## 4. DTOs (exactos, tal como están en el código)
+
+### Auth DTOs
+
+#### `RegisterEntrenadorDto` (request)
+```json
+{
+  "nombre": "string (required, max 100)",
+  "email": "string (required, email válido, max 150)",
+  "password": "string (required, min 8 chars, ≥1 mayúscula, ≥1 número)"
+}
+```
+
+#### `LoginDto` (request)
+```json
+{
+  "email": "string (required)",
+  "password": "string (required)"
+}
+```
+
+#### `RefreshTokenRequestDto` (request)
+```json
+{
+  "refreshToken": "string (required)"
+}
+```
+
+#### `AuthResponseDto` (response de register, login, refresh)
+```json
+{
+  "accessToken": "string",
+  "refreshToken": "string",
+  "tipo": "string (\"entrenador\" | \"cliente\")",
+  "usuario": {
+    "id": "guid",
+    "tenantId": "guid",
+    "nombre": "string",
+    "email": "string",
+    "plan": "string | null"
+  }
+}
+```
+
+> **Nota:** Para clientes, `usuario.plan` siempre es `null`.  
+> Para entrenadores, `usuario.plan` = `"trial"` (u otro valor de plan).
+
+#### `MeDto` (response de GET /auth/me)
+```json
+{
+  "id": "guid",
+  "tenantId": "guid",
+  "nombre": "string",
+  "email": "string",
+  "tipo": "string (\"entrenador\" | \"cliente\")",
+  "plan": "string | null"
+}
 ```
 
 ---
 
-## 3. Arquitectura
+### Clientes DTOs
 
-### Estructura de carpetas
-
-```
-NutriEval.API/
-├── Controllers/
-│   ├── AuthController.cs
-│   ├── ClientesController.cs
-│   ├── EvaluacionesController.cs
-│   ├── MedidasController.cs
-│   ├── FotosController.cs
-│   ├── SesionesController.cs
-│   └── ConfiguracionController.cs
-├── Services/
-│   ├── Interfaces/
-│   │   ├── IAuthService.cs
-│   │   ├── IClienteService.cs
-│   │   ├── IEvaluacionService.cs
-│   │   ├── IMedidasService.cs
-│   │   ├── IFotosService.cs
-│   │   ├── ISesionService.cs
-│   │   └── ICloudinaryService.cs
-│   ├── AuthService.cs
-│   ├── ClienteService.cs
-│   ├── EvaluacionService.cs
-│   ├── MedidasService.cs
-│   ├── FotosService.cs
-│   ├── SesionService.cs
-│   └── CloudinaryService.cs
-├── Repositories/
-│   ├── Interfaces/
-│   │   ├── IClienteRepository.cs
-│   │   ├── IEvaluacionRepository.cs
-│   │   ├── IMedidasRepository.cs
-│   │   ├── IFotosRepository.cs
-│   │   └── ISesionRepository.cs
-│   ├── ClienteRepository.cs
-│   ├── EvaluacionRepository.cs
-│   ├── MedidasRepository.cs
-│   ├── FotosRepository.cs
-│   └── SesionRepository.cs
-├── Models/
-│   ├── Entities/
-│   │   ├── Entrenador.cs
-│   │   ├── Cliente.cs
-│   │   ├── Evaluacion.cs
-│   │   ├── MedidaCorporal.cs
-│   │   ├── FotoProgreso.cs
-│   │   ├── Rutina.cs
-│   │   ├── Ejercicio.cs
-│   │   ├── PlanNutricional.cs
-│   │   ├── Sesion.cs
-│   │   ├── Checkin.cs
-│   │   ├── Pago.cs
-│   │   └── SuscripcionSaas.cs
-│   └── DTOs/
-│       ├── Auth/
-│       ├── Clientes/
-│       ├── Evaluaciones/
-│       ├── Medidas/
-│       ├── Fotos/
-│       └── Sesiones/
-├── Data/
-│   └── NutriEvalDbContext.cs
-├── Middleware/
-│   ├── ExceptionMiddleware.cs
-│   └── TenantMiddleware.cs
-├── Extensions/
-│   └── ServiceExtensions.cs
-├── appsettings.json
-├── appsettings.Development.json
-└── Program.cs
+#### `CreateClienteDto` (request)
+```json
+{
+  "nombre": "string (required, max 100)",
+  "email": "string? (email válido, max 150)",
+  "fechaNacimiento": "DateOnly? (YYYY-MM-DD)",
+  "sexo": "string? (\"Masculino\" | \"Femenino\" | \"Otro\")",
+  "pesoInicial": "decimal? (> 0)",
+  "estatura": "decimal? (> 0)",
+  "objetivo": "string? (\"bajar_grasa\" | \"ganar_musculo\" | \"recomposicion\" | \"rendimiento\")",
+  "nivel": "string? (\"principiante\" | \"intermedio\" | \"avanzado\")",
+  "telefono": "string?",
+  "contactoEmergencia": "object?",
+  "salud": "object?",
+  "habitos": "object?",
+  "passwordTemporal": "string? (min 6 chars)"
+}
 ```
 
-### Patrón de respuesta estándar
+> **⚠️ Discrepancia:** `CreateClienteValidator` acepta `Sexo` como `"Masculino"` / `"Femenino"` / `"Otro"` (con mayúscula).  
+> `UpdateClienteValidator` acepta `sexo` como `"masculino"` / `"femenino"` (minúscula, sin `"Otro"`). **Inconsistencia real en el código.**
+
+#### `UpdateClienteDto` (request) — todos los campos son opcionales
+```json
+{
+  "nombre": "string?",
+  "email": "string?",
+  "fechaNacimiento": "DateOnly?",
+  "sexo": "string? (\"masculino\" | \"femenino\")",
+  "pesoInicial": "decimal? (> 0)",
+  "estatura": "decimal? (> 0)",
+  "objetivo": "string?",
+  "nivel": "string?",
+  "telefono": "string?",
+  "contactoEmergencia": "object?",
+  "salud": "object?",
+  "habitos": "object?",
+  "activo": "bool?"
+}
+```
+
+#### `ClienteListItemDto` (response de GET /clientes)
+```json
+{
+  "id": "guid",
+  "nombre": "string",
+  "email": "string | null",
+  "objetivo": "string | null",
+  "nivel": "string | null",
+  "pesoInicial": "decimal | null",
+  "estatura": "decimal | null",
+  "activo": "bool",
+  "createdAt": "DateTimeOffset"
+}
+```
+
+#### `ClienteDetalleDto` (response de GET /clientes/{id}, POST /clientes, PUT /clientes/{id})
+```json
+{
+  "id": "guid",
+  "tenantId": "guid",
+  "nombre": "string",
+  "email": "string | null",
+  "fechaNacimiento": "DateOnly | null",
+  "sexo": "string | null",
+  "pesoInicial": "decimal | null",
+  "estatura": "decimal | null",
+  "objetivo": "string | null",
+  "nivel": "string | null",
+  "telefono": "string | null",
+  "contactoEmergencia": "object | null",
+  "salud": "object | null",
+  "habitos": "object | null",
+  "parqCompletado": "bool",
+  "parqDatos": "object | null",
+  "parqFecha": "DateTimeOffset | null",
+  "consentimientoAceptado": "bool",
+  "consentimientoFecha": "DateTimeOffset | null",
+  "fotosIniciales": "object | null",
+  "activo": "bool",
+  "createdAt": "DateTimeOffset"
+}
+```
+
+> **Nota de serialización:** Los campos JSON (`contactoEmergencia`, `salud`, `habitos`, `parqDatos`, `fotosIniciales`) se deserializan desde la BD y devuelven `null` si están vacíos (`"{}"` o `"[]"`).
+
+---
+
+### Evaluaciones DTOs
+
+#### `CreateEvaluacionDto` (request)
+```json
+{
+  "tipo": "string (required: \"nutricional\" | \"fisica\")",
+  "datosEntrada": "object (required)",
+  "resultados": "object (required)",
+  "fecha": "DateOnly? (default: hoy UTC)",
+  "notas": "string? (max 2000)"
+}
+```
+
+#### `EvaluacionListItemDto` (response de GET lista)
+```json
+{
+  "id": "guid",
+  "clienteId": "guid",
+  "tipo": "string",
+  "fecha": "DateOnly",
+  "notas": "string | null",
+  "createdAt": "DateTimeOffset"
+}
+```
+
+#### `EvaluacionDetalleDto` (response de GET detalle y POST)
+```json
+{
+  "id": "guid",
+  "tenantId": "guid",
+  "clienteId": "guid",
+  "tipo": "string",
+  "datosEntrada": "object | null",
+  "resultados": "object | null",
+  "fecha": "DateOnly",
+  "notas": "string | null",
+  "createdAt": "DateTimeOffset"
+}
+```
+
+---
+
+### Medidas DTOs
+
+#### `CreateMedidaDto` (request) — al menos un campo numérico requerido
+```json
+{
+  "peso": "decimal? (> 0)",
+  "porcentajeGrasa": "decimal? (0-100)",
+  "masaMuscular": "decimal? (> 0)",
+  "imc": "decimal? (> 0)",
+  "cintura": "decimal? (> 0)",
+  "cadera": "decimal? (> 0)",
+  "pecho": "decimal? (> 0)",
+  "brazoDerecho": "decimal? (> 0)",
+  "brazoIzquierdo": "decimal? (> 0)",
+  "piernaDerecha": "decimal? (> 0)",
+  "piernaIzquierda": "decimal? (> 0)",
+  "fecha": "DateOnly? (default: hoy UTC)",
+  "notas": "string? (max 2000)"
+}
+```
+
+#### `MedidaDto` (response de GET lista y POST)
+```json
+{
+  "id": "guid",
+  "tenantId": "guid",
+  "clienteId": "guid",
+  "peso": "decimal | null",
+  "porcentajeGrasa": "decimal | null",
+  "masaMuscular": "decimal | null",
+  "imc": "decimal | null",
+  "cintura": "decimal | null",
+  "cadera": "decimal | null",
+  "pecho": "decimal | null",
+  "brazoDerecho": "decimal | null",
+  "brazoIzquierdo": "decimal | null",
+  "piernaDerecha": "decimal | null",
+  "piernaIzquierda": "decimal | null",
+  "fecha": "DateOnly",
+  "notas": "string | null",
+  "createdAt": "DateTimeOffset"
+}
+```
+
+---
+
+### Fotos DTOs
+
+#### `UploadFotoDto` (request — multipart/form-data)
+```
+archivo:       File (required, max 10 MB, extensión: .jpg/.jpeg/.png/.webp)
+tipo:          string (required: "frontal" | "lateral_der" | "lateral_izq" | "espalda")
+fecha:         DateOnly? (YYYY-MM-DD)
+mesReferencia: string? (formato "YYYY-MM")
+```
+
+#### `FotoDto` (response de GET lista y POST)
+```json
+{
+  "id": "guid",
+  "tenantId": "guid",
+  "clienteId": "guid",
+  "urlCloudinary": "string",
+  "publicId": "string",
+  "tipo": "string",
+  "fecha": "DateOnly",
+  "mesReferencia": "string | null",
+  "subidoPor": "string",
+  "createdAt": "DateTimeOffset"
+}
+```
+
+---
+
+### Sesiones DTOs
+
+#### `CreateSesionDto` (request)
+```json
+{
+  "clienteId": "guid (required)",
+  "fechaHora": "DateTimeOffset (required)",
+  "duracionMin": "int (default 60, 1-480)",
+  "notas": "string? (max 2000)"
+}
+```
+
+#### `UpdateSesionDto` (request) — todos opcionales
+```json
+{
+  "fechaHora": "DateTimeOffset?",
+  "duracionMin": "int? (1-480)",
+  "estado": "string? (\"programada\" | \"completada\" | \"cancelada\" | \"no_asistio\")",
+  "notas": "string? (max 2000)"
+}
+```
+
+#### `SesionDto` (response de GET lista, POST y PUT)
+```json
+{
+  "id": "guid",
+  "tenantId": "guid",
+  "clienteId": "guid",
+  "clienteNombre": "string",
+  "fechaHora": "DateTimeOffset",
+  "duracionMin": "int",
+  "estado": "string",
+  "notas": "string | null",
+  "createdAt": "DateTimeOffset"
+}
+```
+
+---
+
+### Configuración DTOs
+
+#### `UpdateRedesDto` (request) — todos opcionales
+```json
+{
+  "instagram": "string? (max 100)",
+  "facebook": "string? (max 100)",
+  "tiktok": "string? (max 100)",
+  "web": "string? (max 200, URL válida)"
+}
+```
+
+#### `ConfiguracionDto` (response de GET y PUT redes)
+```json
+{
+  "id": "guid",
+  "nombre": "string",
+  "email": "string",
+  "plan": "string",
+  "trialEndsAt": "DateOnly | null",
+  "redesSociales": "object | null",
+  "createdAt": "DateTimeOffset"
+}
+```
+
+---
+
+## 5. Endpoints implementados — Request y Response reales
+
+> **Autenticación:** Todos los endpoints excepto `POST /api/auth/register-entrenador`, `POST /api/auth/login` y `POST /api/auth/refresh` requieren `Authorization: Bearer <accessToken>`.
+>
+> **Autorización:** Todos los endpoints (salvo auth) llaman a `RequireEntrenador()` — lanzan 401 si el token es de cliente.
+
+---
+
+### 🔐 Auth — `/api/auth`
+
+#### `POST /api/auth/register-entrenador`
+- **Auth:** ❌ Pública
+- **Request:** `RegisterEntrenadorDto`
+- **Response 201:**
 ```json
 {
   "success": true,
-  "data": { },
+  "data": {
+    "accessToken": "string (JWT 24h)",
+    "refreshToken": "string (JWT 7d)",
+    "tipo": "entrenador",
+    "usuario": {
+      "id": "guid",
+      "tenantId": "guid",
+      "nombre": "string",
+      "email": "string",
+      "plan": "trial"
+    }
+  },
+  "message": "Entrenador registrado exitosamente.",
+  "errors": []
+}
+```
+
+---
+
+#### `POST /api/auth/login`
+- **Auth:** ❌ Pública
+- **Request:** `LoginDto`
+- **Response 200:** igual estructura que register. `tipo` puede ser `"entrenador"` o `"cliente"`. Para clientes, `plan` es `null`.
+- **Errores:** 401 si credenciales inválidas.
+
+---
+
+#### `POST /api/auth/refresh`
+- **Auth:** ❌ Pública (solo requiere refresh token válido)
+- **Request:** `RefreshTokenRequestDto`
+- **Response 200:** igual estructura que login.
+- **Errores:** 401 si refresh token inválido/expirado.
+
+---
+
+#### `POST /api/auth/logout`
+- **Auth:** ✅ Bearer
+- **Request:** (sin body)
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Sesión cerrada. Elimina el token en el cliente.",
+  "errors": []
+}
+```
+> **Nota:** El logout es stateless — el servidor no invalida tokens. El cliente debe eliminar el token local.
+
+---
+
+#### `GET /api/auth/me`
+- **Auth:** ✅ Bearer
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "guid",
+    "tenantId": "guid",
+    "nombre": "string",
+    "email": "string",
+    "tipo": "entrenador | cliente",
+    "plan": "string | null"
+  },
   "message": "Operación exitosa",
   "errors": []
 }
@@ -166,343 +650,464 @@ NutriEval.API/
 
 ---
 
-## 4. Base de Datos — Esquema Completo
+### 👥 Clientes — `/api/clientes`
 
-### Regla fundamental
-**Todas las tablas tienen `tenant_id`**. Todos los queries incluyen `WHERE tenant_id = @tenantId`. El `tenant_id` del entrenador ES su `id` — no es un campo separado en la tabla `Entrenadores`.
-
-### Tablas
-
-#### Entrenadores (usuarios con rol entrenador)
-```sql
-CREATE TABLE entrenadores (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  nombre VARCHAR(100) NOT NULL,
-  email VARCHAR(150) UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  plan VARCHAR(20) DEFAULT 'trial',        -- trial, basic, pro, enterprise
-  trial_ends_at DATE,
-  redes_sociales JSONB DEFAULT '{}',       -- { instagram, facebook, tiktok, web }
-  activo BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### Clientes
-```sql
-CREATE TABLE clientes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES entrenadores(id),
-  nombre VARCHAR(100) NOT NULL,
-  email VARCHAR(150),
-  password_hash TEXT,                       -- null hasta que active su cuenta
-  fecha_nacimiento DATE,
-  sexo VARCHAR(10),                         -- masculino, femenino
-  peso_inicial DECIMAL(5,2),
-  estatura DECIMAL(5,2),
-  objetivo VARCHAR(30),                     -- bajar_grasa, ganar_musculo, recomposicion, rendimiento
-  nivel VARCHAR(20),                        -- principiante, intermedio, avanzado
-  telefono VARCHAR(20),
-  contacto_emergencia JSONB DEFAULT '{}',   -- { nombre, telefono, relacion }
-  salud JSONB DEFAULT '{}',                 -- { lesiones, enfermedades, medicamentos, cirugias, restricciones }
-  habitos JSONB DEFAULT '{}',              -- { sueno, estres, agua, pasos_diarios }
-  parq_completado BOOLEAN DEFAULT false,
-  parq_datos JSONB DEFAULT '{}',            -- respuestas PAR-Q
-  parq_fecha TIMESTAMPTZ,
-  consentimiento_aceptado BOOLEAN DEFAULT false,
-  consentimiento_fecha TIMESTAMPTZ,
-  fotos_iniciales JSONB DEFAULT '[]',       -- urls cloudinary
-  activo BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX idx_clientes_tenant ON clientes(tenant_id);
-```
-
-#### Evaluaciones (nutricionales y físicas)
-```sql
-CREATE TABLE evaluaciones (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  cliente_id UUID NOT NULL REFERENCES clientes(id),
-  tipo VARCHAR(30) NOT NULL,                -- nutricional, fisica
-  datos_entrada JSONB NOT NULL,             -- inputs del formulario
-  resultados JSONB NOT NULL,                -- outputs calculados
-  fecha DATE NOT NULL DEFAULT CURRENT_DATE,
-  notas TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX idx_evaluaciones_cliente ON evaluaciones(cliente_id);
-CREATE INDEX idx_evaluaciones_tenant ON evaluaciones(tenant_id);
-```
-
-#### Medidas Corporales (registro histórico)
-```sql
-CREATE TABLE medidas_corporales (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  cliente_id UUID NOT NULL REFERENCES clientes(id),
-  peso DECIMAL(5,2),
-  porcentaje_grasa DECIMAL(4,2),
-  masa_muscular DECIMAL(5,2),
-  imc DECIMAL(4,2),
-  cintura DECIMAL(5,2),
-  cadera DECIMAL(5,2),
-  pecho DECIMAL(5,2),
-  brazo_derecho DECIMAL(5,2),
-  brazo_izquierdo DECIMAL(5,2),
-  pierna_derecha DECIMAL(5,2),
-  pierna_izquierda DECIMAL(5,2),
-  fecha DATE NOT NULL DEFAULT CURRENT_DATE,
-  notas TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX idx_medidas_cliente ON medidas_corporales(cliente_id);
-```
-
-#### Fotos de Progreso
-```sql
-CREATE TABLE fotos_progreso (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  cliente_id UUID NOT NULL REFERENCES clientes(id),
-  url_cloudinary TEXT NOT NULL,
-  public_id TEXT NOT NULL,                  -- para eliminar de Cloudinary
-  tipo VARCHAR(20) NOT NULL,                -- frontal, lateral_der, lateral_izq, espalda
-  fecha DATE NOT NULL DEFAULT CURRENT_DATE,
-  mes_referencia VARCHAR(7),                -- formato: 2025-01
-  subido_por VARCHAR(20) DEFAULT 'entrenador', -- entrenador, cliente
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX idx_fotos_cliente ON fotos_progreso(cliente_id);
-```
-
-#### Sesiones (agenda)
-```sql
-CREATE TABLE sesiones (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  cliente_id UUID NOT NULL REFERENCES clientes(id),
-  fecha_hora TIMESTAMPTZ NOT NULL,
-  duracion_min INT DEFAULT 60,
-  estado VARCHAR(20) DEFAULT 'programada',  -- programada, completada, cancelada, no_asistio
-  notas TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX idx_sesiones_cliente ON sesiones(cliente_id);
-CREATE INDEX idx_sesiones_fecha ON sesiones(fecha_hora);
-```
-
-#### Rutinas (v2.0 — estructura lista)
-```sql
-CREATE TABLE rutinas (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  cliente_id UUID NOT NULL REFERENCES clientes(id),
-  nombre VARCHAR(100) NOT NULL,
-  descripcion TEXT,
-  dias JSONB DEFAULT '[]',                  -- array de días con ejercicios
-  activa BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### Ejercicios (v2.0 — estructura lista)
-```sql
-CREATE TABLE ejercicios (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID,                           -- null = ejercicio global NutriEval
-  nombre VARCHAR(100) NOT NULL,
-  grupo_muscular VARCHAR(50),
-  instrucciones TEXT,
-  url_video TEXT,
-  errores_comunes TEXT,
-  es_global BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### Planes Nutricionales (v2.0 — estructura lista)
-```sql
-CREATE TABLE planes_nutricionales (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  cliente_id UUID NOT NULL REFERENCES clientes(id),
-  calorias DECIMAL(6,2),
-  proteinas DECIMAL(5,2),
-  carbohidratos DECIMAL(5,2),
-  grasas DECIMAL(5,2),
-  agua DECIMAL(4,2),
-  comidas JSONB DEFAULT '[]',               -- array de comidas del día
-  activo BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### Check-ins Semanales (v2.0 — estructura lista)
-```sql
-CREATE TABLE checkins (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  cliente_id UUID NOT NULL REFERENCES clientes(id),
-  semana DATE NOT NULL,                     -- lunes de la semana
-  energia INT CHECK (energia BETWEEN 1 AND 10),
-  hambre INT CHECK (hambre BETWEEN 1 AND 10),
-  adherencia INT CHECK (adherencia BETWEEN 1 AND 10),
-  sueno INT CHECK (sueno BETWEEN 1 AND 10),
-  estres INT CHECK (estres BETWEEN 1 AND 10),
-  peso_semana DECIMAL(5,2),
-  notas_cliente TEXT,
-  feedback_entrenador TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### Pagos de Clientes (v3.0 — estructura lista)
-```sql
-CREATE TABLE pagos (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  cliente_id UUID NOT NULL REFERENCES clientes(id),
-  monto DECIMAL(10,2) NOT NULL,
-  moneda VARCHAR(3) DEFAULT 'COP',
-  estado VARCHAR(20) DEFAULT 'pendiente',   -- pendiente, pagado, vencido, cancelado
-  proveedor VARCHAR(20),                    -- stripe, mercadopago, efectivo
-  referencia_externa TEXT,
-  vence_en DATE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### Suscripciones SaaS (v4.0 — estructura lista)
-```sql
-CREATE TABLE suscripciones_saas (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  entrenador_id UUID NOT NULL REFERENCES entrenadores(id),
-  plan VARCHAR(20) NOT NULL,                -- trial, basic, pro, enterprise
-  estado VARCHAR(20) DEFAULT 'activa',      -- activa, vencida, cancelada
-  trial_ends_at DATE,
-  next_billing DATE,
-  stripe_customer_id TEXT,
-  stripe_subscription_id TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+#### `GET /api/clientes`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "guid",
+      "nombre": "string",
+      "email": "string | null",
+      "objetivo": "string | null",
+      "nivel": "string | null",
+      "pesoInicial": "decimal | null",
+      "estatura": "decimal | null",
+      "activo": "bool",
+      "createdAt": "DateTimeOffset"
+    }
+  ],
+  "message": "Operación exitosa",
+  "errors": []
+}
 ```
 
 ---
 
-## 5. Endpoints API v1.0
-
-### Auth
-```
-POST /api/auth/register-entrenador    → registro entrenador
-POST /api/auth/login                  → login (entrenador + cliente)
-POST /api/auth/refresh                → renovar JWT
-POST /api/auth/logout                 → invalidar token
-GET  /api/auth/me                     → perfil del usuario actual
-```
-
-### Clientes
-```
-GET    /api/clientes                  → lista clientes del entrenador
-POST   /api/clientes                  → crear cliente
-                                         acepta campo opcional passwordTemporal (string);
-                                         si viene, se hashea con BCrypt y se guarda en password_hash
-GET    /api/clientes/:id              → detalle cliente
-PUT    /api/clientes/:id              → actualizar cliente
-DELETE /api/clientes/:id              → desactivar cliente
-POST   /api/clientes/:id/invitar      → [v2.0] enviar invitación por email
-                                         en v1.0 el entrenador asigna passwordTemporal al crear el cliente
-```
-
-### Evaluaciones
-```
-GET    /api/clientes/:id/evaluaciones          → historial
-POST   /api/clientes/:id/evaluaciones          → crear evaluación
-GET    /api/clientes/:id/evaluaciones/:evalId  → detalle
-DELETE /api/clientes/:id/evaluaciones/:evalId  → eliminar
-```
-
-### Medidas Corporales
-```
-GET    /api/clientes/:id/medidas       → historial medidas
-POST   /api/clientes/:id/medidas       → registrar medidas
-DELETE /api/clientes/:id/medidas/:mid  → eliminar registro
-```
-
-### Fotos de Progreso
-```
-GET    /api/clientes/:id/fotos         → fotos del cliente
-POST   /api/clientes/:id/fotos         → subir foto (multipart)
-DELETE /api/clientes/:id/fotos/:fid    → eliminar foto (Cloudinary + BD)
-```
-
-### Sesiones
-```
-GET    /api/sesiones                   → agenda del entrenador
-POST   /api/sesiones                   → crear sesión
-PUT    /api/sesiones/:id               → actualizar sesión
-DELETE /api/sesiones/:id               → cancelar sesión
-GET    /api/clientes/:id/sesiones      → sesiones de un cliente
-```
-
-### Configuración
-```
-GET    /api/configuracion              → config del entrenador
-PUT    /api/configuracion/redes        → actualizar redes sociales
+#### `POST /api/clientes`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Request:** `CreateClienteDto`
+- **Response 201:**
+```json
+{
+  "success": true,
+  "data": { /* ClienteDetalleDto completo */ },
+  "message": "Cliente creado exitosamente.",
+  "errors": []
+}
 ```
 
 ---
 
-## 6. Roadmap Backend
-
-### ✅ Fase 5 — v1.0 (completada)
-- [x] Crear proyecto ASP.NET Core Web API (.NET 8)
-- [x] Configurar Entity Framework Core + PostgreSQL
-- [x] Crear todas las entidades del esquema
-- [x] Configurar ASP.NET Identity + JWT
-- [x] Implementar middleware de tenant
-- [x] Implementar middleware de excepciones
-- [x] Endpoints Auth completos
-- [x] Endpoints Clientes completos
-- [x] Endpoints Evaluaciones completos
-- [x] Endpoints Medidas completos
-- [x] Endpoints Fotos + integración Cloudinary
-- [x] Endpoints Sesiones completos
-- [x] Endpoints Configuración completos
-- [x] Configurar CORS para frontend Angular
-- [x] Configurar Swagger / Scalar (habilitado en todos los entornos)
-- [x] Deploy en Railway con variables de entorno (Dockerfile + railway.toml + PORT + DATABASE_URL → Npgsql + auto-migrate)
-- [x] Configurar PostgreSQL en Railway
-- [x] `/update-claude-md` al terminar
-
-### ⏳ v2.0
-- [ ] Endpoints Rutinas + Ejercicios
-- [ ] Endpoints Planes Nutricionales
-- [ ] Endpoints Check-ins
-- [ ] Integración Open Food Facts API
-- [ ] POST /api/clientes/:id/invitar — enviar invitación por email (SendGrid) para que el cliente active su cuenta
-- [ ] Notificaciones push (Firebase Cloud Messaging)
-
-### ⏳ v3.0
-- [ ] Endpoints Pagos
-- [ ] Integración Stripe
-- [ ] Integración Mercado Pago
-- [ ] Alertas automáticas de vencimiento
-- [ ] Jobs programados (Hangfire o similar)
-- [ ] Análisis automático de estancamiento
-
-### ⏳ v4.0
-- [ ] Endpoints Suscripciones SaaS
-- [ ] Sistema de registro público de entrenadores
-- [ ] Panel superadmin
-- [ ] White-label (subdominio por entrenador)
-- [ ] Integración WhatsApp Business API
+#### `GET /api/clientes/{id}`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "guid",
+    "tenantId": "guid",
+    "nombre": "string",
+    "email": "string | null",
+    "fechaNacimiento": "DateOnly | null",
+    "sexo": "string | null",
+    "pesoInicial": "decimal | null",
+    "estatura": "decimal | null",
+    "objetivo": "string | null",
+    "nivel": "string | null",
+    "telefono": "string | null",
+    "contactoEmergencia": "object | null",
+    "salud": "object | null",
+    "habitos": "object | null",
+    "parqCompletado": false,
+    "parqDatos": "object | null",
+    "parqFecha": "DateTimeOffset | null",
+    "consentimientoAceptado": false,
+    "consentimientoFecha": "DateTimeOffset | null",
+    "fotosIniciales": "object | null",
+    "activo": true,
+    "createdAt": "DateTimeOffset"
+  },
+  "message": "Operación exitosa",
+  "errors": []
+}
+```
+- **Errores:** 404 si cliente no existe o no pertenece al tenant.
 
 ---
 
-## 7. Decisiones Abiertas
+#### `PUT /api/clientes/{id}`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Request:** `UpdateClienteDto` (todos los campos opcionales)
+- **Response 200:** `ClienteDetalleDto` completo
+- **Errores:** 404 si no existe; 400 si email duplicado.
 
-- [ ] Estrategia de refresh tokens (en BD o stateless con blacklist)
-- [ ] Sistema de emails (SendGrid vs Resend vs Mailgun)
-- [ ] Jobs programados (Hangfire vs Quartz.NET)
-- [ ] Estrategia de backups PostgreSQL en Railway
+---
+
+#### `DELETE /api/clientes/{id}`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Comportamiento:** Soft delete (`activo = false`)
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Cliente desactivado.",
+  "errors": []
+}
+```
+
+---
+
+#### `POST /api/clientes/{id}/invitar`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Response 202:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Invitación pendiente. El sistema de emails estará disponible en v2.0.",
+  "errors": []
+}
+```
+> **Estado:** Placeholder — no envía emails realmente. Valida que el cliente tenga email.
+
+---
+
+### 📊 Evaluaciones — `/api/clientes/{clienteId}/evaluaciones`
+
+#### `GET /api/clientes/{clienteId}/evaluaciones`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "guid",
+      "clienteId": "guid",
+      "tipo": "string",
+      "fecha": "DateOnly",
+      "notas": "string | null",
+      "createdAt": "DateTimeOffset"
+    }
+  ],
+  "message": "Operación exitosa",
+  "errors": []
+}
+```
+
+---
+
+#### `POST /api/clientes/{clienteId}/evaluaciones`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Request:** `CreateEvaluacionDto`
+- **Response 201:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "guid",
+    "tenantId": "guid",
+    "clienteId": "guid",
+    "tipo": "string",
+    "datosEntrada": "object | null",
+    "resultados": "object | null",
+    "fecha": "DateOnly",
+    "notas": "string | null",
+    "createdAt": "DateTimeOffset"
+  },
+  "message": "Evaluación creada exitosamente.",
+  "errors": []
+}
+```
+
+---
+
+#### `GET /api/clientes/{clienteId}/evaluaciones/{evalId}`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Response 200:** `EvaluacionDetalleDto` completo (mismo que POST)
+
+---
+
+#### `DELETE /api/clientes/{clienteId}/evaluaciones/{evalId}`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Evaluación eliminada.",
+  "errors": []
+}
+```
+
+---
+
+### 📏 Medidas — `/api/clientes/{clienteId}/medidas`
+
+#### `GET /api/clientes/{clienteId}/medidas`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": [ /* array de MedidaDto */ ],
+  "message": "Operación exitosa",
+  "errors": []
+}
+```
+
+---
+
+#### `POST /api/clientes/{clienteId}/medidas`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Request:** `CreateMedidaDto` (al menos un campo numérico)
+- **Response 201:** `MedidaDto` completo
+
+---
+
+#### `DELETE /api/clientes/{clienteId}/medidas/{mid}`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Medida eliminada.",
+  "errors": []
+}
+```
+
+---
+
+### 📸 Fotos — `/api/clientes/{clienteId}/fotos`
+
+#### `GET /api/clientes/{clienteId}/fotos`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": [ /* array de FotoDto */ ],
+  "message": "Operación exitosa",
+  "errors": []
+}
+```
+
+---
+
+#### `POST /api/clientes/{clienteId}/fotos`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Content-Type:** `multipart/form-data`
+- **Límite:** 10 MB
+- **Request:** `UploadFotoDto` (form fields)
+- **Response 201:** `FotoDto` completo
+
+---
+
+#### `DELETE /api/clientes/{clienteId}/fotos/{fid}`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Foto eliminada.",
+  "errors": []
+}
+```
+
+---
+
+### 📅 Sesiones — `/api/sesiones`
+
+#### `GET /api/sesiones`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Descripción:** Lista TODAS las sesiones del tenant
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": [ /* array de SesionDto */ ],
+  "message": "Operación exitosa",
+  "errors": []
+}
+```
+
+---
+
+#### `GET /api/clientes/{clienteId}/sesiones`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Descripción:** Lista sesiones de un cliente específico
+- **Response 200:** igual al anterior
+
+---
+
+#### `POST /api/sesiones`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Request:** `CreateSesionDto`
+- **Response 201:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "guid",
+    "tenantId": "guid",
+    "clienteId": "guid",
+    "clienteNombre": "string",
+    "fechaHora": "DateTimeOffset",
+    "duracionMin": 60,
+    "estado": "programada",
+    "notas": "string | null",
+    "createdAt": "DateTimeOffset"
+  },
+  "message": "Sesión creada exitosamente.",
+  "errors": []
+}
+```
+
+---
+
+#### `PUT /api/sesiones/{id}`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Request:** `UpdateSesionDto` (todos opcionales)
+- **Response 200:** `SesionDto` completo actualizado
+
+---
+
+#### `DELETE /api/sesiones/{id}`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Sesión cancelada.",
+  "errors": []
+}
+```
+
+---
+
+### ⚙️ Configuración — `/api/configuracion`
+
+#### `GET /api/configuracion`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "guid",
+    "nombre": "string",
+    "email": "string",
+    "plan": "string",
+    "trialEndsAt": "DateOnly | null",
+    "redesSociales": "object | null",
+    "createdAt": "DateTimeOffset"
+  },
+  "message": "Operación exitosa",
+  "errors": []
+}
+```
+
+---
+
+#### `PUT /api/configuracion/redes`
+- **Auth:** ✅ Bearer (solo entrenador)
+- **Request:** `UpdateRedesDto`
+- **Response 200:** `ConfiguracionDto` completo actualizado
+
+---
+
+## 6. Tabla resumen de endpoints
+
+| Método | Ruta | Auth | Request DTO | Response DTO |
+|--------|------|------|-------------|--------------|
+| POST | `/api/auth/register-entrenador` | — | `RegisterEntrenadorDto` | `AuthResponseDto` |
+| POST | `/api/auth/login` | — | `LoginDto` | `AuthResponseDto` |
+| POST | `/api/auth/refresh` | — | `RefreshTokenRequestDto` | `AuthResponseDto` |
+| POST | `/api/auth/logout` | ✅ | — | `null` |
+| GET | `/api/auth/me` | ✅ | — | `MeDto` |
+| GET | `/api/clientes` | ✅ | — | `ClienteListItemDto[]` |
+| POST | `/api/clientes` | ✅ | `CreateClienteDto` | `ClienteDetalleDto` |
+| GET | `/api/clientes/{id}` | ✅ | — | `ClienteDetalleDto` |
+| PUT | `/api/clientes/{id}` | ✅ | `UpdateClienteDto` | `ClienteDetalleDto` |
+| DELETE | `/api/clientes/{id}` | ✅ | — | `null` |
+| POST | `/api/clientes/{id}/invitar` | ✅ | — | `null` (202) |
+| GET | `/api/clientes/{cid}/evaluaciones` | ✅ | — | `EvaluacionListItemDto[]` |
+| POST | `/api/clientes/{cid}/evaluaciones` | ✅ | `CreateEvaluacionDto` | `EvaluacionDetalleDto` |
+| GET | `/api/clientes/{cid}/evaluaciones/{eid}` | ✅ | — | `EvaluacionDetalleDto` |
+| DELETE | `/api/clientes/{cid}/evaluaciones/{eid}` | ✅ | — | `null` |
+| GET | `/api/clientes/{cid}/medidas` | ✅ | — | `MedidaDto[]` |
+| POST | `/api/clientes/{cid}/medidas` | ✅ | `CreateMedidaDto` | `MedidaDto` |
+| DELETE | `/api/clientes/{cid}/medidas/{mid}` | ✅ | — | `null` |
+| GET | `/api/clientes/{cid}/fotos` | ✅ | — | `FotoDto[]` |
+| POST | `/api/clientes/{cid}/fotos` | ✅ | `UploadFotoDto` (form) | `FotoDto` |
+| DELETE | `/api/clientes/{cid}/fotos/{fid}` | ✅ | — | `null` |
+| GET | `/api/sesiones` | ✅ | — | `SesionDto[]` |
+| POST | `/api/sesiones` | ✅ | `CreateSesionDto` | `SesionDto` |
+| PUT | `/api/sesiones/{id}` | ✅ | `UpdateSesionDto` | `SesionDto` |
+| DELETE | `/api/sesiones/{id}` | ✅ | — | `null` |
+| GET | `/api/clientes/{cid}/sesiones` | ✅ | — | `SesionDto[]` |
+| GET | `/api/configuracion` | ✅ | — | `ConfiguracionDto` |
+| PUT | `/api/configuracion/redes` | ✅ | `UpdateRedesDto` | `ConfiguracionDto` |
+
+**Total: 26 endpoints implementados**
+
+---
+
+## 7. Discrepancias y notas importantes
+
+### ⚠️ Inconsistencias reales en el código
+
+1. **Validación de `Sexo` inconsistente:**
+   - `CreateClienteValidator`: acepta `"Masculino"` / `"Femenino"` / `"Otro"` (primera letra mayúscula, incluye "Otro")
+   - `UpdateClienteValidator`: acepta `"masculino"` / `"femenino"` (minúscula, sin "Otro")
+   - **Impacto:** Un cliente creado con `sexo: "Masculino"` no puede actualizarse con el mismo valor.
+
+2. **DELETE de sesión dice "cancelada" pero borra el registro:**
+   - El mensaje dice `"Sesión cancelada."` pero el comportamiento real depende de `SesionService.DeleteAsync()` — revisar si es hard o soft delete.
+
+3. **Logout es stateless:**
+   - No invalida el token en el servidor. El refresh token sigue siendo válido. El cliente debe borrar ambos tokens localmente.
+
+4. **POST /clientes/{id}/invitar es un stub:**
+   - Valida que el cliente tenga email, pero no envía ninguna comunicación. Responde 202 Accepted.
+
+### 📋 Entidades sin controller implementado
+Las siguientes entidades existen en la BD pero no tienen endpoints aún:
+- `Rutina` + `Ejercicio`
+- `PlanNutricional`
+- `Checkin`
+- `Pago`
+- `SuscripcionSaas`
+
+### 🔑 Estructura del JWT
+Claims en el access token:
+- `sub` = `tenantId` (EntrenadorId para entrenadores, TenantId del cliente)
+- `user_id` = id del usuario
+- `tipo` = `"entrenador"` | `"cliente"`
+- `email` (ClaimTypes.Email)
+- `nombre`
+- `jti` = UUID único del token
+
+El refresh token agrega: `token_type: "refresh"`
+
+---
+
+## 8. Comportamiento de errores
+
+| Excepción | HTTP Status | Manejada por |
+|-----------|-------------|--------------|
+| `ArgumentException` | 400 Bad Request | `ExceptionMiddleware` |
+| `KeyNotFoundException` | 404 Not Found | `ExceptionMiddleware` |
+| `UnauthorizedAccessException` | 401 Unauthorized | `ExceptionMiddleware` |
+| FluentValidation `ValidationException` | 422 Unprocessable Entity | `ExceptionMiddleware` |
+| Cualquier otra | 500 Internal Server Error | `ExceptionMiddleware` |
+
+Los errores de validación de FluentValidation retornan:
+```json
+{
+  "success": false,
+  "data": null,
+  "message": "Errores de validación.",
+  "errors": ["mensaje 1", "mensaje 2"]
+}
+```
