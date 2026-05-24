@@ -25,7 +25,9 @@ public class ClienteRepository(NutriEvalDbContext db) : IClienteRepository
                 CreatedAt         = c.CreatedAt,
                 TieneFotos        = c.Fotos.Any(),
                 TieneEvaluaciones = c.Evaluaciones.Any(),
-                TieneSesiones     = c.Sesiones.Any()
+                TieneSesiones     = c.Sesiones.Any(),
+                TieneSalud        = c.Salud != null && c.Salud != "{}",
+                TieneHabitos      = c.Habitos != null && c.Habitos != "{}"
             })
             .ToListAsync();
 

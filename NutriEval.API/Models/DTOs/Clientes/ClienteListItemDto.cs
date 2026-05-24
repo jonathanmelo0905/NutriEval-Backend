@@ -12,8 +12,10 @@ public class ClienteListItemDto
     public bool Activo { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 
-    // Campos calculados — generados con EXISTS en la misma query
+    // Campos calculados — generados en la misma query (EXISTS / comparación JSON)
     public bool TieneFotos { get; set; }
     public bool TieneEvaluaciones { get; set; }
     public bool TieneSesiones { get; set; }
+    public bool TieneSalud { get; set; }
+    public bool TieneHabitos { get; set; }
 }

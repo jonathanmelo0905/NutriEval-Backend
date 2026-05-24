@@ -1,6 +1,6 @@
 # CLAUDE-BACKEND.md — Fuente de verdad del backend NutriEval.API
 
-> **Última actualización:** 2026-05-23  
+> **Última actualización:** 2026-05-24  
 > **Estado:** Revisado contra el código real. Toda la información aquí es fiel al código fuente.
 
 ---
@@ -343,7 +343,14 @@ Estados válidos de sesión: `programada`, `completada`, `cancelada`, `no_asisti
   "pesoInicial": "decimal | null",
   "estatura": "decimal | null",
   "activo": "bool",
-  "createdAt": "DateTimeOffset"
+  "createdAt": "DateTimeOffset",
+
+  // Campos calculados de onboarding (calculados en la misma query SQL)
+  "tieneFotos": "bool",        // true si el cliente tiene ≥1 FotoProgreso
+  "tieneEvaluaciones": "bool", // true si el cliente tiene ≥1 Evaluacion
+  "tieneSesiones": "bool",     // true si el cliente tiene ≥1 Sesion
+  "tieneSalud": "bool",        // true si Salud ≠ "{}" y ≠ null
+  "tieneHabitos": "bool"       // true si Habitos ≠ "{}" y ≠ null
 }
 ```
 
@@ -668,7 +675,12 @@ mesReferencia: string? (formato "YYYY-MM")
       "pesoInicial": "decimal | null",
       "estatura": "decimal | null",
       "activo": "bool",
-      "createdAt": "DateTimeOffset"
+      "createdAt": "DateTimeOffset",
+      "tieneFotos": "bool",
+      "tieneEvaluaciones": "bool",
+      "tieneSesiones": "bool",
+      "tieneSalud": "bool",
+      "tieneHabitos": "bool"
     }
   ],
   "message": "Operación exitosa",
